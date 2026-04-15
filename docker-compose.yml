@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # 后端应用服务
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_INFERENCE_MODE=onnx
+      - APP_SECRET_KEY=production-micro-expression-secret
+      - DB_TYPE=mysql
+      - MYSQL_HOST=db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=rootpassword
+      - MYSQL_DB=micro_expression
+      - REDIS_HOST=redis
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./datasets:/app/datasets
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  # 生产级数据库 MySQL
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: micro_expression
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  # 缓存服务 Redis
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql_data:
