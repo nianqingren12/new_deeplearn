@@ -269,6 +269,37 @@
     <section class="grid">
       <article class="glass-card">
         <div class="section-title">
+          <p class="eyebrow">Analytics</p>
+          <h3>用户行为分析</h3>
+        </div>
+        <div class="inline-actions">
+          <button id="behaviorAnalysisBtn" class="primary-btn">行为分析</button>
+          <button id="emotionAnalysisBtn" class="ghost-btn">情绪分析</button>
+        </div>
+        <div id="analyticsPanel" class="result-panel">
+          <p>点击按钮查看详细的用户行为和情绪分析。</p>
+        </div>
+      </article>
+
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">API Management</p>
+          <h3>企业API管理</h3>
+        </div>
+        <div class="stack-form">
+          <button id="generateApiKeyBtn" class="primary-btn">生成API密钥</button>
+          <button id="viewApiKeysBtn" class="ghost-btn">查看API密钥</button>
+          <button id="apiUsageBtn" class="ghost-btn">API使用统计</button>
+        </div>
+        <div id="apiPanel" class="result-panel">
+          <p>企业用户可以生成API密钥，集成微表情识别功能到自己的系统中。</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="glass-card">
+        <div class="section-title">
           <p class="eyebrow">Membership</p>
           <h3>会员体系</h3>
         </div>
@@ -330,6 +361,161 @@
         <h3>课程与咨询服务</h3>
       </div>
       <div id="courseGrid" class="course-grid"></div>
+    </section>
+
+    <!-- 心理评估模块 -->
+    <section class="grid">
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Assessment</p>
+          <h3>心理评估量表</h3>
+        </div>
+        <div class="inline-actions">
+          <button id="sasBtn" class="primary-btn">焦虑自评量表 (SAS)</button>
+          <button id="sdsBtn" class="ghost-btn">抑郁自评量表 (SDS)</button>
+          <button id="pssBtn" class="ghost-btn">压力知觉量表 (PSS)</button>
+        </div>
+        <div id="assessmentPanel" class="result-panel">
+          <p>选择一个量表开始评估，了解您的心理健康状况。</p>
+        </div>
+      </article>
+
+      <!-- 视频流实时分析 -->
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Live Stream</p>
+          <h3>实时情绪监测</h3>
+        </div>
+        <video id="liveVideo" autoplay playsinline muted width="100%"></video>
+        <div class="inline-actions">
+          <button id="startLiveBtn" class="primary-btn">开始实时监测</button>
+          <button id="stopLiveBtn" class="ghost-btn">停止监测</button>
+        </div>
+        <div id="liveEmotionDisplay" class="result-panel">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <p>当前情绪：<strong id="currentEmotion">-</strong></p>
+              <p>置信度：<strong id="liveConfidence">-</strong></p>
+            </div>
+            <div style="text-align: right;">
+              <p>持续时间：<strong id="sessionDuration">-</strong></p>
+              <p>已分析帧数：<strong id="frameCount">-</strong></p>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- 生理指标与健康监测 -->
+    <section class="grid">
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Biometrics</p>
+          <h3>生理指标监测</h3>
+        </div>
+        <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); gap: 15px;">
+          <div class="stat-box" style="background: rgba(255,100,100,0.1); border-color: rgba(255,100,100,0.3);">
+            <span>心率 (HR)</span>
+            <strong id="heartRate">-</strong>
+            <span style="font-size: 0.7rem; color: #888;">bpm</span>
+          </div>
+          <div class="stat-box" style="background: rgba(100,200,255,0.1); border-color: rgba(100,200,255,0.3);">
+            <span>心率变异性 (HRV)</span>
+            <strong id="hrv">-</strong>
+            <span style="font-size: 0.7rem; color: #888;">ms</span>
+          </div>
+          <div class="stat-box" style="background: rgba(100,255,150,0.1); border-color: rgba(100,255,150,0.3);">
+            <span>呼吸率</span>
+            <strong id="breathRate">-</strong>
+            <span style="font-size: 0.7rem; color: #888;">次/分</span>
+          </div>
+          <div class="stat-box" style="background: rgba(255,200,100,0.1); border-color: rgba(255,200,100,0.3);">
+            <span>压力水平</span>
+            <strong id="stressLevel">-</strong>
+            <span style="font-size: 0.7rem; color: #888;">%</span>
+          </div>
+        </div>
+        <div id="biometricAdvice" class="result-panel" style="margin-top: 15px;">
+          <p>生理指标分析建议将显示在这里。</p>
+        </div>
+      </article>
+
+      <!-- 情绪日记 -->
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Diary</p>
+          <h3>情绪日记</h3>
+        </div>
+        <div class="stack-form">
+          <label>
+            <span>今日心情</span>
+            <select id="moodSelect">
+              <option value="5">😊 非常开心</option>
+              <option value="4">🙂 开心</option>
+              <option value="3">😐 一般</option>
+              <option value="2">😔 低落</option>
+              <option value="1">😢 非常低落</option>
+            </select>
+          </label>
+          <label>
+            <span>心情描述</span>
+            <textarea id="moodNote" rows="3" placeholder="记录今天的心情和感受..."></textarea>
+          </label>
+          <button id="saveMoodBtn" class="primary-btn">保存心情记录</button>
+        </div>
+        <div id="moodCalendar" style="margin-top: 15px;">
+          <h4 style="margin-bottom: 10px; color: #ccc;">最近7天心情记录</h4>
+          <div id="moodDays" style="display: flex; justify-content: space-between;">
+            <div class="mood-day" v-for="day in 7">
+              <div class="mood-emoji">📅</div>
+              <div class="mood-date">--</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- 心理健康服务 -->
+    <section class="grid">
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Mindfulness</p>
+          <h3>放松训练</h3>
+        </div>
+        <div class="stack-form">
+          <button id="breathingBtn" class="primary-btn">🎵 深呼吸练习</button>
+          <button id="meditationBtn" class="ghost-btn">🧘 冥想训练</button>
+          <button id="relaxBtn" class="ghost-btn">🌙 放松音乐</button>
+        </div>
+        <div id="relaxationPanel" class="result-panel">
+          <div id="breathingCircle" style="display: none; width: 150px; height: 150px; margin: 20px auto; border-radius: 50%; border: 3px solid #00ffcc; animation: breathe 4s ease-in-out infinite;"></div>
+          <p id="relaxationText">选择一个放松练习开始。</p>
+        </div>
+      </article>
+
+      <!-- 专家咨询 -->
+      <article class="glass-card">
+        <div class="section-title">
+          <p class="eyebrow">Consultation</p>
+          <h3>专家咨询</h3>
+        </div>
+        <div class="stack-form">
+          <label>
+            <span>咨询类型</span>
+            <select id="consultType">
+              <option>情绪困扰</option>
+              <option>压力管理</option>
+              <option>人际关系</option>
+              <option>职业发展</option>
+            </select>
+          </label>
+          <button id="bookConsultBtn" class="primary-btn">预约专家咨询</button>
+          <button id="anonymousConsultBtn" class="ghost-btn">匿名咨询</button>
+        </div>
+        <div id="consultPanel" class="result-panel">
+          <p>专业心理咨询师随时为您提供帮助。</p>
+        </div>
+      </article>
     </section>
   </main>
 

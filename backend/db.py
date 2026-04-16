@@ -65,6 +65,20 @@ def get_redis_client():
 
 
 def init_db() -> None:
+    # 初始化API相关表
+    try:
+        from backend.api_management import init_api_tables
+        init_api_tables()
+    except ImportError:
+        pass
+    
+    # 初始化营销相关表
+    try:
+        from backend.marketing import init_marketing_tables
+        init_marketing_tables()
+    except ImportError:
+        pass
+    
     # SQL 脚本兼容性处理
     scripts = [
         """
@@ -478,10 +492,14 @@ def update_custom_training_request_status(request_id: int, status: str) -> dict[
 
 
 def get_admin_overview() -> dict[str, Any]:
+    valid_tables = {"users", "recognitions", "reports", "orders", "custom_training_requests"}
     with get_connection() as conn:
         cursor = conn.cursor()
         def count_table(table):
-            cursor.execute(f"SELECT COUNT(*) as count FROM {table}")
+            if table not in valid_tables:
+                return 0
+            sql = "SELECT COUNT(*) as count FROM {}".format(table) if DB_TYPE == "mysql" else "SELECT COUNT(*) FROM {}".format(table)
+            cursor.execute(sql)
             row = cursor.fetchone()
             return row["count"] if DB_TYPE == "mysql" else row[0]
         return {"user_count": count_table("users"), "recognition_count": count_table("recognitions"), "report_count": count_table("reports"), "order_count": count_table("orders"), "lead_count": count_table("custom_training_requests")}

@@ -5,6 +5,7 @@ import hashlib
 import os
 from collections import Counter
 from dataclasses import dataclass
+from typing import Any
 
 
 EMOTIONS = ["开心", "悲伤", "愤怒", "惊讶", "恐惧", "厌恶", "平静"]

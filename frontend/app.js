@@ -44,6 +44,13 @@ const elements = {
   simulatePayBtn: document.getElementById("simulatePayBtn"),
   payPlanName: document.getElementById("payPlanName"),
   payPlanAmount: document.getElementById("payPlanAmount"),
+  analyticsPanel: document.getElementById("analyticsPanel"),
+  apiPanel: document.getElementById("apiPanel"),
+  behaviorAnalysisBtn: document.getElementById("behaviorAnalysisBtn"),
+  emotionAnalysisBtn: document.getElementById("emotionAnalysisBtn"),
+  generateApiKeyBtn: document.getElementById("generateApiKeyBtn"),
+  viewApiKeysBtn: document.getElementById("viewApiKeysBtn"),
+  apiUsageBtn: document.getElementById("apiUsageBtn"),
 };
 
 function showToast(message, isError = false) {
@@ -574,10 +581,24 @@ async function startCamera() {
   if (state.stream) {
     return;
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-  state.stream = stream;
-  elements.camera.srcObject = stream;
-  showToast("摄像头已开启");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    state.stream = stream;
+    elements.camera.srcObject = stream;
+    showToast("摄像头已开启");
+  } catch (error) {
+    console.error("摄像头启动失败:", error);
+    if (error.name === "NotAllowedError") {
+      showToast("摄像头权限被拒绝，请在浏览器设置中允许摄像头访问", true);
+    } else if (error.name === "NotFoundError") {
+      showToast("未检测到摄像头设备", true);
+    } else if (error.name === "NotReadableError") {
+      showToast("摄像头被其他应用占用，请关闭其他使用摄像头的程序", true);
+    } else {
+      showToast(`摄像头启动失败: ${error.message}`, true);
+    }
+    throw error;
+  }
 }
 
 async function captureAndRecognize() {
@@ -997,6 +1018,89 @@ async function updateLeadStatus(requestId, status) {
   await loadAdminWorkspace();
 }
 
+async function getBehaviorAnalysis() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  try {
+    const result = await request("/api/analytics/behavior", { method: "GET" });
+    setPanelText(
+      elements.analyticsPanel,
+      `时间范围：${result.time_range.start} 至 ${result.time_range.end}\n总活动数：${result.activity_metrics.total_activities}\n活跃天数：${result.activity_metrics.active_days}\n日均活动：${result.activity_metrics.average_daily_activities}\n活动频率：${result.activity_metrics.activity_frequency}\n\n功能使用分布：${Object.entries(result.feature_usage).map(([key, value]) => `${key}: ${value}`).join(" / ")}`
+    );
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function getEmotionAnalysis() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  try {
+    const result = await request("/api/analytics/emotion", { method: "GET" });
+    setPanelText(
+      elements.analyticsPanel,
+      `主导情绪：${result.dominant_emotion}\n平均强度：${result.average_intensity}\n\n情绪分布：${Object.entries(result.emotion_distribution).map(([key, value]) => `${key}: ${value}`).join(" / ")}\n\n情绪趋势：最近 ${result.emotion_trends.length} 天的情绪变化`
+    );
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function generateApiKey() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  try {
+    const result = await request("/api/api-keys/generate", { method: "POST" });
+    setPanelText(
+      elements.apiPanel,
+      `API密钥：${result.api_key}\n${result.message}`
+    );
+    showToast("API密钥生成成功");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function viewApiKeys() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  try {
+    const keys = await request("/api/api-keys", { method: "GET" });
+    if (keys.length === 0) {
+      setPanelText(elements.apiPanel, "暂无API密钥，请生成新的API密钥");
+      return;
+    }
+    const keyList = keys.map(key => `ID: ${key.id}\n密钥：${key.api_key}\n状态：${key.status}\n创建时间：${key.created_at}\n最后使用：${key.last_used_at}`).join("\n\n");
+    setPanelText(elements.apiPanel, keyList);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function getApiUsage() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  try {
+    const usage = await request("/api/api-usage", { method: "GET" });
+    setPanelText(
+      elements.apiPanel,
+      `总调用次数：${usage.total_calls}\n成功次数：${usage.success_calls}\n失败次数：${usage.error_calls}`
+    );
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function setupEvents() {
   elements.authForm.addEventListener("submit", async (event) => {
     try {
@@ -1141,6 +1245,56 @@ function setupEvents() {
       showToast(error.message, true);
     }
   });
+
+  if (elements.behaviorAnalysisBtn) {
+    elements.behaviorAnalysisBtn.addEventListener("click", async () => {
+      try {
+        await getBehaviorAnalysis();
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
+
+  if (elements.emotionAnalysisBtn) {
+    elements.emotionAnalysisBtn.addEventListener("click", async () => {
+      try {
+        await getEmotionAnalysis();
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
+
+  if (elements.generateApiKeyBtn) {
+    elements.generateApiKeyBtn.addEventListener("click", async () => {
+      try {
+        await generateApiKey();
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
+
+  if (elements.viewApiKeysBtn) {
+    elements.viewApiKeysBtn.addEventListener("click", async () => {
+      try {
+        await viewApiKeys();
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
+
+  if (elements.apiUsageBtn) {
+    elements.apiUsageBtn.addEventListener("click", async () => {
+      try {
+        await getApiUsage();
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
 }
 
 async function bootstrap() {
@@ -1153,8 +1307,584 @@ async function bootstrap() {
   }
 }
 
+// 心理评估量表功能
+async function loadAssessmentScale(scaleType) {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  
+  try {
+    const result = await request(`/api/assessment/scales/${scaleType}`, { method: "GET" });
+    
+    const panel = document.getElementById("assessmentPanel");
+    panel.innerHTML = `
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin: 0 0 10px; color: var(--text);">${result.scale_name}</h4>
+        <p style="color: var(--muted); font-size: 0.9rem;">共 ${result.question_count} 道题目</p>
+      </div>
+      <div id="assessmentQuestions">
+        ${result.questions.map((q, index) => `
+          <div class="assessment-question">
+            <p>${index + 1}. ${q.question}</p>
+            <div class="assessment-options">
+              <button class="assessment-option" onclick="selectAnswer('${q.key}', 1)">完全没有</button>
+              <button class="assessment-option" onclick="selectAnswer('${q.key}', 2)">有一点</button>
+              <button class="assessment-option" onclick="selectAnswer('${q.key}', 3)">中等程度</button>
+              <button class="assessment-option" onclick="selectAnswer('${q.key}', 4)">相当多</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <button id="submitAssessmentBtn" class="primary-btn" style="margin-top: 20px; display: none;">提交评估</button>
+    `;
+    
+    state.currentAssessment = {
+      scaleType,
+      answers: {},
+      questionCount: result.question_count
+    };
+    
+    // 更新按钮状态
+    checkAssessmentComplete();
+    
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+state.assessmentAnswers = {};
+
+function selectAnswer(key, value) {
+  state.assessmentAnswers[key] = value;
+  
+  // 更新UI
+  document.querySelectorAll('.assessment-option').forEach(btn => {
+    if (btn.onclick && btn.onclick.toString().includes(key)) {
+      btn.classList.remove('selected');
+    }
+  });
+  
+  event.target.classList.add('selected');
+  
+  checkAssessmentComplete();
+}
+
+function checkAssessmentComplete() {
+  const scaleType = state.currentAssessment?.scaleType;
+  const questionCount = state.currentAssessment?.questionCount || 0;
+  const answeredCount = Object.keys(state.assessmentAnswers).length;
+  
+  const submitBtn = document.getElementById('submitAssessmentBtn');
+  if (answeredCount >= questionCount && questionCount > 0) {
+    submitBtn.style.display = 'block';
+    submitBtn.addEventListener('click', () => submitAssessment(scaleType), { once: true });
+  }
+}
+
+async function submitAssessment(scaleType) {
+  if (!state.token) return;
+  
+  try {
+    const result = await request(`/api/assessment/${scaleType}`, {
+      method: "POST",
+      body: JSON.stringify({ answers: state.assessmentAnswers })
+    });
+    
+    const panel = document.getElementById("assessmentPanel");
+    panel.innerHTML = `
+      <div class="assessment-result">
+        <div class="result-score">${result.standard_score}</div>
+        <div class="result-level ${result.level.toLowerCase()}">${result.level}</div>
+        <div class="result-interpretation">
+          <p><strong>评分说明：</strong></p>
+          <p>原始分：${result.raw_score} 分</p>
+          <p>标准分：${result.standard_score} 分</p>
+          <hr style="margin: 15px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p><strong>评估解读：</strong></p>
+          <p>${result.interpretation}</p>
+        </div>
+      </div>
+    `;
+    
+    showToast("评估完成");
+    state.assessmentAnswers = {};
+    
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+// 视频流实时监测功能
+let liveSessionId = null;
+let liveInterval = null;
+
+async function startLiveMonitoring() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  
+  try {
+    // 创建视频会话
+    const result = await request("/api/video/create-session", { method: "POST" });
+    liveSessionId = result.session_id;
+    
+    // 开启摄像头
+    if (!state.stream) {
+      await startCamera();
+    }
+    
+    const liveVideo = document.getElementById("liveVideo");
+    liveVideo.srcObject = state.stream;
+    
+    // 开始实时分析
+    startLiveAnalysis();
+    
+    document.getElementById("startLiveBtn").style.display = 'none';
+    document.getElementById("stopLiveBtn").style.display = 'inline-block';
+    
+    showToast("实时监测已开始");
+    
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function startLiveAnalysis() {
+  let frameCount = 0;
+  let startTime = Date.now();
+  
+  liveInterval = setInterval(async () => {
+    if (!liveSessionId) return;
+    
+    try {
+      const video = document.getElementById("liveVideo");
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      
+      const frameBase64 = canvas.toDataURL("image/jpeg", 0.8);
+      const timestamp = Date.now();
+      
+      const result = await request("/api/video/process-frame", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: liveSessionId,
+          frame_base64: frameBase64,
+          timestamp: timestamp
+        })
+      });
+      
+      // 更新显示
+      document.getElementById("currentEmotion").textContent = result.emotion;
+      document.getElementById("liveConfidence").textContent = result.confidence;
+      document.getElementById("frameCount").textContent = ++frameCount;
+      
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+      const mins = Math.floor(duration / 60);
+      const secs = duration % 60;
+      document.getElementById("sessionDuration").textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      
+    } catch (error) {
+      console.error("Live analysis error:", error);
+    }
+  }, 500); // 每500ms分析一帧
+}
+
+async function stopLiveMonitoring() {
+  if (!liveSessionId) return;
+  
+  try {
+    // 获取会话摘要
+    const result = await request(`/api/video/session-summary/${liveSessionId}`, { method: "GET" });
+    
+    const panel = document.getElementById("liveEmotionDisplay");
+    panel.innerHTML += `
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <h4 style="margin: 0 0 10px;">监测会话摘要</h4>
+        <p>主导情绪：${result.dominant_emotion}</p>
+        <p>平均置信度：${result.average_confidence}</p>
+        <p>分析帧数：${result.total_frames}</p>
+        <p>持续时间：${result.duration_seconds}秒</p>
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error("Session summary error:", error);
+  }
+  
+  // 停止分析
+  clearInterval(liveInterval);
+  liveInterval = null;
+  liveSessionId = null;
+  
+  document.getElementById("startLiveBtn").style.display = 'inline-block';
+  document.getElementById("stopLiveBtn").style.display = 'none';
+  
+  showToast("实时监测已停止");
+}
+
+// 生理指标监测功能
+async function updateBiometrics() {
+  if (!state.token) return;
+  
+  try {
+    const result = await request("/api/health/biometrics", { method: "GET" });
+    
+    document.getElementById("heartRate").textContent = result.heart_rate;
+    document.getElementById("hrv").textContent = result.hrv;
+    document.getElementById("breathRate").textContent = result.breathing_rate;
+    document.getElementById("stressLevel").textContent = result.stress_percentage;
+    
+    const advicePanel = document.getElementById("biometricAdvice");
+    advicePanel.innerHTML = `
+      <p style="color: var(--text); margin-bottom: 10px;"><strong>健康建议：</strong></p>
+      <p>${result.health_advice}</p>
+      <div style="margin-top: 15px; display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+        <div style="padding: 10px; background: rgba(255,100,100,0.1); border-radius: 8px;">
+          <p style="margin: 0; font-size: 0.8rem;">心率状态</p>
+          <p style="margin: 0; font-weight: bold; color: #ff6464;">${result.heart_rate_status}</p>
+        </div>
+        <div style="padding: 10px; background: rgba(100,200,255,0.1); border-radius: 8px;">
+          <p style="margin: 0; font-size: 0.8rem;">HRV状态</p>
+          <p style="margin: 0; font-weight: bold; color: #64c8ff;">${result.hrv_status}</p>
+        </div>
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error("Biometrics update error:", error);
+  }
+}
+
+// 情绪日记功能
+async function saveMood() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  
+  const moodValue = document.getElementById("moodSelect").value;
+  const note = document.getElementById("moodNote").value;
+  
+  try {
+    await request("/api/mood/save", {
+      method: "POST",
+      body: JSON.stringify({
+        mood: parseInt(moodValue),
+        note: note,
+        date: new Date().toISOString().split('T')[0]
+      })
+    });
+    
+    showToast("心情记录已保存");
+    document.getElementById("moodNote").value = "";
+    
+    // 更新心情日历
+    await loadMoodHistory();
+    
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function loadMoodHistory() {
+  if (!state.token) return;
+  
+  try {
+    const result = await request("/api/mood/history", { method: "GET" });
+    
+    const moodDays = document.getElementById("moodDays");
+    const today = new Date();
+    
+    moodDays.innerHTML = result.records.slice(-7).map((record, index) => {
+      const date = new Date(record.date);
+      const moodEmoji = getMoodEmoji(record.mood);
+      const dateStr = date.getMonth() + 1 + '/' + date.getDate();
+      
+      return `
+        <div class="mood-day" style="background: ${getMoodBackground(record.mood)};">
+          <div class="mood-emoji">${moodEmoji}</div>
+          <div class="mood-date">${dateStr}</div>
+        </div>
+      `;
+    }).join("");
+    
+  } catch (error) {
+    console.error("Mood history error:", error);
+  }
+}
+
+function getMoodEmoji(mood) {
+  const emojis = {
+    1: "😢",
+    2: "😔",
+    3: "😐",
+    4: "🙂",
+    5: "😊"
+  };
+  return emojis[mood] || "📅";
+}
+
+function getMoodBackground(mood) {
+  const colors = {
+    1: "rgba(255,77,77,0.1)",
+    2: "rgba(255,141,154,0.1)",
+    3: "rgba(150,150,150,0.1)",
+    4: "rgba(77,226,177,0.1)",
+    5: "rgba(106,166,255,0.1)"
+  };
+  return colors[mood] || "rgba(255,255,255,0.03)";
+}
+
+// 放松训练功能
+let breathingInterval = null;
+
+async function startBreathingExercise() {
+  const panel = document.getElementById("relaxationPanel");
+  const circle = document.getElementById("breathingCircle");
+  const text = document.getElementById("relaxationText");
+  
+  panel.innerHTML = `
+    <div class="breathing-guide">
+      <div id="breathingCircle" style="width: 150px; height: 150px; margin: 20px auto; border-radius: 50%; border: 3px solid #00ffcc; display: block;"></div>
+      <div class="breathing-text" id="breathingText">准备开始...</div>
+      <div class="breathing-countdown" id="breathingCountdown">4</div>
+    </div>
+  `;
+  
+  // 深呼吸循环：吸气4秒，屏息2秒，呼气4秒
+  let phase = 0;
+  let counter = 4;
+  
+  breathingInterval = setInterval(() => {
+    const circle = document.getElementById("breathingCircle");
+    const text = document.getElementById("breathingText");
+    const countdown = document.getElementById("breathingCountdown");
+    
+    if (!circle || !text || !countdown) {
+      clearInterval(breathingInterval);
+      return;
+    }
+    
+    if (phase === 0) {
+      // 吸气
+      text.textContent = "吸气...";
+      countdown.textContent = counter;
+      const scale = 0.8 + (1 - counter / 4) * 0.4;
+      circle.style.transform = `scale(${scale})`;
+      circle.style.opacity = 0.6 + (1 - counter / 4) * 0.4;
+    } else if (phase === 1) {
+      // 屏息
+      text.textContent = "屏息...";
+      countdown.textContent = counter;
+    } else {
+      // 呼气
+      text.textContent = "呼气...";
+      countdown.textContent = counter;
+      const scale = 1.2 - (1 - counter / 4) * 0.4;
+      circle.style.transform = `scale(${scale})`;
+      circle.style.opacity = 1 - (1 - counter / 4) * 0.4;
+    }
+    
+    counter--;
+    if (counter < 0) {
+      phase = (phase + 1) % 3;
+      counter = phase === 1 ? 2 : 4;
+    }
+  }, 1000);
+  
+  showToast("深呼吸练习开始");
+}
+
+function stopBreathingExercise() {
+  clearInterval(breathingInterval);
+  breathingInterval = null;
+  
+  const panel = document.getElementById("relaxationPanel");
+  panel.innerHTML = `
+    <div id="breathingCircle" style="display: none;"></div>
+    <p id="relaxationText">深呼吸练习已结束。感觉好点了吗？</p>
+  `;
+  
+  showToast("练习结束");
+}
+
+async function startMeditation() {
+  const panel = document.getElementById("relaxationPanel");
+  panel.innerHTML = `
+    <div class="breathing-guide">
+      <div style="width: 120px; height: 120px; margin: 20px auto; border-radius: 50%; background: linear-gradient(135deg, #6aa6ff, #8f6dff); display: flex; align-items: center; justify-content: center;">
+        <span style="font-size: 48px;">🧘</span>
+      </div>
+      <p style="font-size: 18px; color: var(--text);">冥想模式已激活</p>
+      <p style="color: var(--muted); font-size: 0.9rem;">请找一个安静的地方，闭上眼睛，专注于你的呼吸。</p>
+      <div style="margin-top: 20px; font-size: 24px; color: var(--accent);">🕯️ 正念冥想进行中...</div>
+    </div>
+  `;
+  
+  showToast("冥想模式已开启");
+}
+
+async function playRelaxMusic() {
+  const panel = document.getElementById("relaxationPanel");
+  panel.innerHTML = `
+    <div class="breathing-guide">
+      <div style="width: 100px; height: 100px; margin: 20px auto; border-radius: 50%; background: rgba(106,166,255,0.2); display: flex; align-items: center; justify-content: center; animation: pulse 2s ease-in-out infinite;">
+        <span style="font-size: 36px;">🎵</span>
+      </div>
+      <p style="font-size: 18px; color: var(--text);">放松音乐播放中</p>
+      <p style="color: var(--muted); font-size: 0.9rem;">舒缓的音乐有助于放松身心，减轻压力。</p>
+      <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+        <button class="ghost-btn" style="padding: 10px 20px;">⏸ 暂停</button>
+        <button class="ghost-btn" style="padding: 10px 20px;">⏹ 停止</button>
+      </div>
+    </div>
+  `;
+  
+  showToast("放松音乐已播放");
+}
+
+// 专家咨询功能
+async function bookConsultation() {
+  if (!state.token) {
+    showToast("请先登录", true);
+    return;
+  }
+  
+  const consultType = document.getElementById("consultType").value;
+  
+  try {
+    const result = await request("/api/consultation/book", {
+      method: "POST",
+      body: JSON.stringify({
+        type: consultType,
+        date: new Date(Date.now() + 86400000).toISOString().split('T')[0] // 明天
+      })
+    });
+    
+    const panel = document.getElementById("consultPanel");
+    panel.innerHTML = `
+      <div style="padding: 15px; background: rgba(77,226,177,0.1); border-radius: 12px;">
+        <p style="color: var(--success); font-weight: bold; margin-bottom: 10px;">✅ 预约成功</p>
+        <p>咨询类型：${result.appointment.type}</p>
+        <p>预约时间：${result.appointment.scheduled_date}</p>
+        <p>咨询师：${result.appointment.counselor_name}</p>
+        <p style="font-size: 0.85rem; color: var(--muted); margin-top: 10px;">我们会通过邮件发送确认信息，请保持邮箱畅通。</p>
+      </div>
+    `;
+    
+    showToast("预约成功，我们会尽快与您联系");
+    
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function anonymousConsult() {
+  const panel = document.getElementById("consultPanel");
+  panel.innerHTML = `
+    <div style="padding: 15px;">
+      <p style="color: var(--text); margin-bottom: 15px;"><strong>匿名咨询模式</strong></p>
+      <div style="background: rgba(106,166,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+        <p style="font-size: 0.9rem; color: var(--muted); margin: 0;">
+          您的身份信息将被完全保密。我们的AI咨询师随时准备倾听您的困扰。
+        </p>
+      </div>
+      <textarea id="anonymousMessage" rows="4" placeholder="请描述您的困扰..." style="width: 100%; padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text); resize: none;"></textarea>
+      <button id="sendAnonymousBtn" class="primary-btn" style="margin-top: 12px; width: 100%;">发送咨询</button>
+    </div>
+  `;
+  
+  document.getElementById("sendAnonymousBtn").addEventListener("click", async () => {
+    const message = document.getElementById("anonymousMessage").value;
+    if (!message.trim()) {
+      showToast("请输入您的咨询内容", true);
+      return;
+    }
+    
+    try {
+      const result = await request("/api/consultation/anonymous", {
+        method: "POST",
+        body: JSON.stringify({ message })
+      });
+      
+      panel.innerHTML = `
+        <div style="padding: 15px;">
+          <p style="color: var(--text); margin-bottom: 15px;"><strong>AI 咨询师回复：</strong></p>
+          <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px;">
+            <p style="color: var(--muted); line-height: 1.6;">${result.response}</p>
+          </div>
+          <button id="newAnonymousBtn" class="ghost-btn" style="margin-top: 15px; width: 100%;">继续咨询</button>
+        </div>
+      `;
+      
+      document.getElementById("newAnonymousBtn").addEventListener("click", anonymousConsult);
+      
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  
+  showToast("匿名咨询通道已开启");
+}
+
+// 绑定事件
+function setupAdditionalEvents() {
+  // 心理评估量表
+  document.getElementById("sasBtn")?.addEventListener("click", () => loadAssessmentScale("sas"));
+  document.getElementById("sdsBtn")?.addEventListener("click", () => loadAssessmentScale("sds"));
+  document.getElementById("pssBtn")?.addEventListener("click", () => loadAssessmentScale("pss"));
+  
+  // 视频流实时监测
+  document.getElementById("startLiveBtn")?.addEventListener("click", startLiveMonitoring);
+  document.getElementById("stopLiveBtn")?.addEventListener("click", stopLiveMonitoring);
+  
+  // 生理指标更新
+  document.getElementById("heartRate")?.addEventListener("click", updateBiometrics);
+  
+  // 情绪日记
+  document.getElementById("saveMoodBtn")?.addEventListener("click", saveMood);
+  
+  // 放松训练
+  document.getElementById("breathingBtn")?.addEventListener("click", () => {
+    startBreathingExercise();
+    setTimeout(stopBreathingExercise, 60000); // 60秒后自动停止
+  });
+  document.getElementById("meditationBtn")?.addEventListener("click", startMeditation);
+  document.getElementById("relaxBtn")?.addEventListener("click", playRelaxMusic);
+  
+  // 专家咨询
+  document.getElementById("bookConsultBtn")?.addEventListener("click", bookConsultation);
+  document.getElementById("anonymousConsultBtn")?.addEventListener("click", anonymousConsult);
+  
+  // 页面加载时更新生理指标和心情历史
+  if (state.token) {
+    updateBiometrics();
+    loadMoodHistory();
+  }
+}
+
+// 更新bootstrap函数，添加新事件绑定
+function bootstrap() {
+  setupEvents();
+  setupAdditionalEvents();
+  try {
+    Promise.all([loadPlans(), loadCourses()]);
+    refreshAuthenticatedData();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 window.buyPlan = buyPlan;
 window.buyCourse = buyCourse;
 window.openReport = openReport;
 window.updateLeadStatus = updateLeadStatus;
+window.runHealthAssessment = runHealthAssessment;
+window.openCalibrationModal = openCalibrationModal;
+window.closeCalibrationModal = closeCalibrationModal;
+window.startCalibration = startCalibration;
 bootstrap();
