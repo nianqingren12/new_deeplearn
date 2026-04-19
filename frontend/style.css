@@ -567,6 +567,206 @@ textarea:focus {
   color: var(--accent);
 }
 
+/* Toast Types */
+.toast-success {
+  border-color: rgba(77, 226, 177, 0.4) !important;
+  background: rgba(77, 226, 177, 0.1) !important;
+}
+
+.toast-error {
+  border-color: rgba(255, 141, 154, 0.4) !important;
+  background: rgba(255, 141, 154, 0.1) !important;
+}
+
+.toast-warning {
+  border-color: rgba(255, 212, 121, 0.4) !important;
+  background: rgba(255, 212, 121, 0.1) !important;
+}
+
+.toast-info {
+  border-color: rgba(106, 166, 255, 0.4) !important;
+  background: rgba(106, 166, 255, 0.1) !important;
+}
+
+/* Toast Animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+/* Loading Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Button Loading State */
+button.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Input Validation */
+.input-error {
+  display: block;
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 6px;
+  margin-left: 4px;
+}
+
+.input-error.hidden {
+  display: none;
+}
+
+input.invalid {
+  border-color: var(--danger) !important;
+  background: rgba(255, 141, 154, 0.08) !important;
+}
+
+/* Animation Classes */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes highlight {
+  0% { box-shadow: 0 0 0 0 rgba(106, 166, 255, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(106, 166, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(106, 166, 255, 0); }
+}
+
+.pulse {
+  animation: pulse 0.6s ease-in-out;
+}
+
+.fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.highlight {
+  animation: highlight 0.8s ease-out;
+}
+
+/* Custom Modal */
+.custom-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.custom-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  transform: translateY(20px);
+  transition: transform 0.3s ease;
+}
+
+.custom-modal.show .modal-content {
+  transform: translateY(0);
+}
+
+.modal-content h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.modal-content p {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Button Click Effect */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Card Hover Effect */
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+/* Smooth Transitions */
+* {
+  transition-property: background-color, border-color, color, opacity, transform, box-shadow;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+
 .w-full {
   width: 100%;
 }

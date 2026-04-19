@@ -1,3 +1,5 @@
+const BASE_URL = window.location.origin;
+
 const state = {
   token: localStorage.getItem("microExpressionToken") || "",
   authMode: "login",
@@ -53,14 +55,144 @@ const elements = {
   apiUsageBtn: document.getElementById("apiUsageBtn"),
 };
 
-function showToast(message, isError = false) {
+function showToast(message, isError = false, type = "info") {
   elements.toast.textContent = message;
-  elements.toast.classList.remove("hidden");
-  elements.toast.style.borderColor = isError ? "rgba(255,141,154,0.38)" : "rgba(77,226,177,0.38)";
+  elements.toast.classList.remove("hidden", "toast-success", "toast-error", "toast-warning", "toast-info");
+  
+  const typeClasses = {
+    success: "toast-success",
+    error: "toast-error",
+    warning: "toast-warning",
+    info: "toast-info"
+  };
+  
+  elements.toast.classList.add(typeClasses[type] || typeClasses.info);
+  elements.toast.style.borderColor = isError 
+    ? "rgba(255,141,154,0.38)" 
+    : "rgba(77,226,177,0.38)";
+    
+  elements.toast.style.animation = "slideIn 0.3s ease-out";
+  
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => {
-    elements.toast.classList.add("hidden");
-  }, 2600);
+    elements.toast.style.animation = "slideOut 0.3s ease-in";
+    setTimeout(() => {
+      elements.toast.classList.add("hidden");
+    }, 300);
+  }, 3000);
+}
+
+function showLoading(button, originalText = "加载中...") {
+  if (!button) return;
+  button.disabled = true;
+  button.dataset.originalText = button.textContent;
+  button.innerHTML = `<span class="spinner"></span>${originalText}`;
+  button.classList.add("loading");
+}
+
+function hideLoading(button) {
+  if (!button) return;
+  button.disabled = false;
+  button.innerHTML = button.dataset.originalText || "确定";
+  button.classList.remove("loading");
+}
+
+function addButtonClickFeedback(button, action) {
+  button.addEventListener("click", async (e) => {
+    if (button.classList.contains("loading")) {
+      e.preventDefault();
+      return;
+    }
+    
+    showLoading(button);
+    
+    try {
+      await action(e);
+      hideLoading(button);
+    } catch (error) {
+      hideLoading(button);
+      showToast(error.message || "操作失败", true);
+    }
+  });
+}
+
+function validateEmail(email) {
+  const re = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  return re.test(email);
+}
+
+function validatePassword(password) {
+  return password.length >= 6;
+}
+
+function addInputValidation(input, validationFunc, errorMsg) {
+  const errorEl = document.createElement("span");
+  errorEl.className = "input-error";
+  input.parentNode.appendChild(errorEl);
+  
+  input.addEventListener("blur", () => {
+    if (!validationFunc(input.value)) {
+      errorEl.textContent = errorMsg;
+      errorEl.classList.remove("hidden");
+      input.classList.add("invalid");
+    } else {
+      errorEl.textContent = "";
+      errorEl.classList.add("hidden");
+      input.classList.remove("invalid");
+    }
+  });
+  
+  input.addEventListener("input", () => {
+    if (input.classList.contains("invalid")) {
+      if (validationFunc(input.value)) {
+        errorEl.textContent = "";
+        errorEl.classList.add("hidden");
+        input.classList.remove("invalid");
+      }
+    }
+  });
+  
+  return errorEl;
+}
+
+function animateElement(element, animation) {
+  element.classList.add(animation);
+  setTimeout(() => {
+    element.classList.remove(animation);
+  }, 600);
+}
+
+function highlightElement(element) {
+  element.classList.add("highlight");
+  setTimeout(() => {
+    element.classList.remove("highlight");
+  }, 800);
+}
+
+function showModal(title, content, onConfirm) {
+  const modal = document.createElement("div");
+  modal.className = "custom-modal";
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
+    <div class="modal-content">
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(content)}</p>
+      <div class="modal-actions">
+        <button class="ghost-btn" onclick="this.closest('.custom-modal').remove()">取消</button>
+        <button class="primary-btn" onclick="onConfirm?.(); this.closest('.custom-modal').remove()">确定</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.classList.add("show");
+}
+
+function updateButtonState(button, isLoading, loadingText = "处理中...") {
+  if (isLoading) {
+    showLoading(button, loadingText);
+  } else {
+    hideLoading(button);
+  }
 }
 
 function setPanelText(element, text) {
@@ -88,7 +220,8 @@ async function request(path, options = {}) {
   if (state.token) {
     headers.Authorization = `Bearer ${state.token}`;
   }
-  const response = await fetch(path, { ...options, headers });
+  const fullUrl = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+  const response = await fetch(fullUrl, { ...options, headers });
   let payload = {};
   try {
     payload = await response.json();
@@ -559,7 +692,7 @@ async function authenticate(event) {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  persistToken(result.token);
+  persistToken(result.tokens?.access_token || result.token);
   await refreshAuthenticatedData();
   showToast(`${state.authMode === "register" ? "注册" : "登录"}成功`);
 }
@@ -1102,11 +1235,28 @@ async function getApiUsage() {
 }
 
 function setupEvents() {
+  // 表单验证
+  if (elements.emailInput) {
+    addInputValidation(elements.emailInput, validateEmail, "请输入有效的邮箱地址");
+  }
+  if (elements.passwordInput) {
+    addInputValidation(elements.passwordInput, validatePassword, "密码至少需要6个字符");
+  }
+
   elements.authForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    showLoading(submitBtn, "登录中...");
+    
     try {
       await authenticate(event);
+      showToast(`${state.authMode === "register" ? "注册" : "登录"}成功！`, false, "success");
+      highlightElement(elements.authStatus);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(submitBtn);
     }
   });
 
@@ -1115,183 +1265,371 @@ function setupEvents() {
       state.authMode = button.dataset.mode;
       elements.tabButtons.forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
+      animateElement(button, "pulse");
+      showToast(`已切换至${button.dataset.mode === "login" ? "登录" : "注册"}模式`);
     });
   });
 
-  document.getElementById("forgotPasswordBtn").addEventListener("click", async () => {
+  const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+  forgotPasswordBtn.addEventListener("click", async () => {
+    showLoading(forgotPasswordBtn, "发送中...");
     try {
       await handleForgotPassword();
+      showToast("验证码已发送至邮箱", false, "success");
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(forgotPasswordBtn);
     }
   });
 
-  document.getElementById("startCameraBtn").addEventListener("click", async () => {
+  const startCameraBtn = document.getElementById("startCameraBtn");
+  startCameraBtn.addEventListener("click", async () => {
+    showLoading(startCameraBtn, "开启摄像头...");
     try {
       await startCamera();
+      showToast("摄像头已成功开启", false, "success");
+      animateElement(elements.camera, "fadeIn");
     } catch (error) {
-      showToast(`摄像头开启失败：${error.message}`, true);
+      showToast(`摄像头开启失败：${error.message}`, true, "error");
+    } finally {
+      hideLoading(startCameraBtn);
     }
   });
 
-  document.getElementById("captureBtn").addEventListener("click", async () => {
+  const captureBtn = document.getElementById("captureBtn");
+  captureBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(captureBtn, "识别中...");
     try {
       await captureAndRecognize();
+      showToast("识别完成！", false, "success");
+      highlightElement(elements.recognitionResult);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(captureBtn);
     }
   });
 
-  document.getElementById("analyzeUploadBtn").addEventListener("click", async () => {
+  const analyzeUploadBtn = document.getElementById("analyzeUploadBtn");
+  analyzeUploadBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    const file = elements.uploadInput.files?.[0];
+    if (!file) {
+      showToast("请先选择图片或视频", true, "warning");
+      return;
+    }
+    
+    showLoading(analyzeUploadBtn, "分析中...");
     try {
       await analyzeUploadedContent();
+      showToast("分析完成！", false, "success");
+      highlightElement(elements.recognitionResult);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(analyzeUploadBtn);
     }
   });
 
-  document.getElementById("generateReportBtn").addEventListener("click", async () => {
+  const generateReportBtn = document.getElementById("generateReportBtn");
+  generateReportBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(generateReportBtn, "生成报告...");
     try {
       await generateReport();
+      showToast("报告生成成功！", false, "success");
+      highlightElement(elements.reportPanel);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(generateReportBtn);
     }
   });
 
-  document.getElementById("runAssessmentBtn").addEventListener("click", async () => {
+  const runAssessmentBtn = document.getElementById("runAssessmentBtn");
+  runAssessmentBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(runAssessmentBtn, "评估中...");
     try {
       await runAssessment();
+      showToast("评估完成！", false, "success");
+      highlightElement(elements.reportPanel);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(runAssessmentBtn);
     }
   });
 
-  document.getElementById("companionBtn").addEventListener("click", async () => {
+  const companionBtn = document.getElementById("companionBtn");
+  companionBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(companionBtn, "思考中...");
     try {
       await companionReply();
+      showToast("助手已回复", false, "success");
+      highlightElement(elements.companionPanel);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(companionBtn);
     }
   });
 
-  document.getElementById("exportBtn").addEventListener("click", async () => {
+  const exportBtn = document.getElementById("exportBtn");
+  exportBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(exportBtn, "导出中...");
     try {
       await exportData();
+      showToast("数据导出成功！", false, "success");
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(exportBtn);
     }
   });
 
-  document.getElementById("adsBtn").addEventListener("click", async () => {
+  const adsBtn = document.getElementById("adsBtn");
+  adsBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    showLoading(adsBtn, "获取推荐...");
     try {
       await loadAdsRecommendation();
+      showToast("推荐已更新", false, "success");
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(adsBtn);
     }
   });
 
-  document.getElementById("rechargeBtn").addEventListener("click", async () => {
+  const rechargeBtn = document.getElementById("rechargeBtn");
+  rechargeBtn.addEventListener("click", async () => {
+    if (!state.token) {
+      showToast("请先登录", true, "warning");
+      return;
+    }
+    
+    const code = elements.rechargeInput.value.trim();
+    if (!code) {
+      showToast("请输入激活密钥", true, "warning");
+      return;
+    }
+    
+    showLoading(rechargeBtn, "充值中...");
     try {
       await rechargeMembership();
+      showToast("充值成功！", false, "success");
+      animateElement(elements.reportCredits, "pulse");
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(rechargeBtn);
     }
   });
 
   elements.closePaymentBtn.addEventListener("click", () => {
     elements.paymentModal.classList.add("hidden");
     state.pendingPlan = null;
+    showToast("已取消支付", false, "info");
   });
 
   elements.simulatePayBtn.addEventListener("click", async () => {
-    await simulatePayment();
+    if (!state.pendingPlan) return;
+    
+    showLoading(elements.simulatePayBtn, "支付中...");
+    try {
+      await simulatePayment();
+      showToast("支付成功！", false, "success");
+      animateElement(elements.membershipTier, "pulse");
+    } catch (error) {
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(elements.simulatePayBtn);
+    }
   });
 
   const exportPdfBtn = document.getElementById("exportPdfBtn");
   if (exportPdfBtn) {
     exportPdfBtn.addEventListener("click", async () => {
+      showLoading(exportPdfBtn, "生成PDF...");
       try {
         await exportPdfReport();
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(exportPdfBtn);
       }
     });
   }
 
-  document.getElementById("customTrainingForm").addEventListener("submit", async (event) => {
+  const customTrainingForm = document.getElementById("customTrainingForm");
+  customTrainingForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    showLoading(submitBtn, "提交中...");
+    
     try {
       await submitCustomTraining(event);
+      showToast("定制需求已提交！", false, "success");
+      highlightElement(elements.customPanel);
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(submitBtn);
     }
   });
 
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    persistToken("");
-    if (state.stream) {
-      state.stream.getTracks().forEach((track) => track.stop());
-      state.stream = null;
-      elements.camera.srcObject = null;
-    }
-    loadUserOverview();
-    showToast("已退出登录");
+  const logoutBtn = document.getElementById("logoutBtn");
+  logoutBtn.addEventListener("click", () => {
+    showModal("确认退出", "确定要退出登录吗？", () => {
+      persistToken("");
+      if (state.stream) {
+        state.stream.getTracks().forEach((track) => track.stop());
+        state.stream = null;
+        elements.camera.srcObject = null;
+      }
+      loadUserOverview();
+      showToast("已安全退出", false, "info");
+    });
   });
 
-  document.getElementById("refreshDashboardBtn").addEventListener("click", async () => {
+  const refreshDashboardBtn = document.getElementById("refreshDashboardBtn");
+  refreshDashboardBtn.addEventListener("click", async () => {
+    showLoading(refreshDashboardBtn, "刷新中...");
     try {
       await refreshAuthenticatedData();
-      showToast("数据已刷新");
+      showToast("数据已刷新", false, "success");
     } catch (error) {
-      showToast(error.message, true);
+      showToast(error.message, true, "error");
+    } finally {
+      hideLoading(refreshDashboardBtn);
     }
   });
 
   if (elements.behaviorAnalysisBtn) {
     elements.behaviorAnalysisBtn.addEventListener("click", async () => {
+      if (!state.token) {
+        showToast("请先登录", true, "warning");
+        return;
+      }
+      
+      showLoading(elements.behaviorAnalysisBtn, "分析中...");
       try {
         await getBehaviorAnalysis();
+        showToast("行为分析完成", false, "success");
+        highlightElement(elements.analyticsPanel);
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(elements.behaviorAnalysisBtn);
       }
     });
   }
 
   if (elements.emotionAnalysisBtn) {
     elements.emotionAnalysisBtn.addEventListener("click", async () => {
+      if (!state.token) {
+        showToast("请先登录", true, "warning");
+        return;
+      }
+      
+      showLoading(elements.emotionAnalysisBtn, "分析中...");
       try {
         await getEmotionAnalysis();
+        showToast("情绪分析完成", false, "success");
+        highlightElement(elements.analyticsPanel);
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(elements.emotionAnalysisBtn);
       }
     });
   }
 
   if (elements.generateApiKeyBtn) {
     elements.generateApiKeyBtn.addEventListener("click", async () => {
+      if (!state.token) {
+        showToast("请先登录", true, "warning");
+        return;
+      }
+      
+      showLoading(elements.generateApiKeyBtn, "生成中...");
       try {
         await generateApiKey();
+        showToast("API密钥已生成，请妥善保存", false, "success");
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(elements.generateApiKeyBtn);
       }
     });
   }
 
   if (elements.viewApiKeysBtn) {
     elements.viewApiKeysBtn.addEventListener("click", async () => {
+      if (!state.token) {
+        showToast("请先登录", true, "warning");
+        return;
+      }
+      
+      showLoading(elements.viewApiKeysBtn, "加载中...");
       try {
         await viewApiKeys();
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(elements.viewApiKeysBtn);
       }
     });
   }
 
   if (elements.apiUsageBtn) {
     elements.apiUsageBtn.addEventListener("click", async () => {
+      if (!state.token) {
+        showToast("请先登录", true, "warning");
+        return;
+      }
+      
+      showLoading(elements.apiUsageBtn, "加载中...");
       try {
         await getApiUsage();
       } catch (error) {
-        showToast(error.message, true);
+        showToast(error.message, true, "error");
+      } finally {
+        hideLoading(elements.apiUsageBtn);
       }
     });
   }
@@ -1868,13 +2206,14 @@ function setupAdditionalEvents() {
 }
 
 // 更新bootstrap函数，添加新事件绑定
-function bootstrap() {
+async function bootstrap() {
   setupEvents();
   setupAdditionalEvents();
   try {
-    Promise.all([loadPlans(), loadCourses()]);
-    refreshAuthenticatedData();
+    await Promise.all([loadPlans(), loadCourses()]);
+    await refreshAuthenticatedData();
   } catch (error) {
+    console.error('初始化错误:', error);
     showToast(error.message, true);
   }
 }

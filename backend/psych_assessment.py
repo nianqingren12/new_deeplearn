@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Tuple
 
 
@@ -7,6 +8,12 @@ class PsychologicalAssessment:
     """
     标准化心理评估量表模块
     包含：焦虑自评量表(SAS)、抑郁自评量表(SDS)、压力知觉量表(PSS)
+    
+    增强特性：
+    - 量表答案验证
+    - 更详细的结果解释和建议
+    - 临床参考信息
+    - 评估结果追踪
     """
 
     # 焦虑自评量表(SAS) - 20题
@@ -84,46 +91,165 @@ class PsychologicalAssessment:
             raise ValueError(f"未知的量表类型: {scale_type}")
 
     @staticmethod
+    def validate_answers(scale_type: str, answers: Dict[str, int]) -> Tuple[bool, str]:
+        """验证量表答案的有效性"""
+        questions = PsychologicalAssessment.get_scale_questions(scale_type)
+        
+        # 检查是否有缺失的答案
+        missing_keys = []
+        for q in questions:
+            key = q["key"]
+            if key not in answers:
+                missing_keys.append(key)
+        
+        if missing_keys:
+            return False, f"缺少以下问题的答案: {', '.join(missing_keys)}"
+        
+        # 检查答案范围是否有效（1-4分）
+        for key, value in answers.items():
+            if not isinstance(value, int) or value < 1 or value > 4:
+                return False, f"问题 {key} 的答案 {value} 无效，必须是1-4之间的整数"
+        
+        return True, "答案验证通过"
+
+    @staticmethod
+    def get_scale_info(scale_type: str) -> Dict[str, Any]:
+        """获取量表的基本信息"""
+        scale_info = {
+            "sas": {
+                "name": "焦虑自评量表",
+                "abbreviation": "SAS",
+                "question_count": 20,
+                "time_required": "约5分钟",
+                "purpose": "评估近期焦虑情绪水平",
+                "validity": "信度系数0.92，效度良好",
+                "reference": "Zung, W.W.K. (1971)"
+            },
+            "sds": {
+                "name": "抑郁自评量表",
+                "abbreviation": "SDS",
+                "question_count": 20,
+                "time_required": "约5分钟",
+                "purpose": "评估近期抑郁情绪水平",
+                "validity": "信度系数0.93，效度良好",
+                "reference": "Zung, W.W.K. (1965)"
+            },
+            "pss": {
+                "name": "压力知觉量表",
+                "abbreviation": "PSS",
+                "question_count": 10,
+                "time_required": "约3分钟",
+                "purpose": "评估近期压力感知水平",
+                "validity": "信度系数0.85，效度良好",
+                "reference": "Cohen, S. et al. (1983)"
+            }
+        }
+        return scale_info.get(scale_type, {})
+
+    @staticmethod
     def calculate_sas_score(answers: Dict[str, int]) -> Dict[str, Any]:
         """计算SAS焦虑自评量表得分"""
+        # 验证答案
+        is_valid, msg = PsychologicalAssessment.validate_answers("sas", answers)
+        if not is_valid:
+            return {
+                "error": msg,
+                "valid": False,
+                "scale_type": "SAS",
+                "scale_name": "焦虑自评量表"
+            }
+        
         raw_score = 0
         for q in PsychologicalAssessment.SAS_QUESTIONS:
             key = q["key"]
             answer = answers.get(key, 1)
             if q.get("reverse", False):
-                # 反向计分：1→4, 2→3, 3→2, 4→1
                 answer = 5 - answer
             raw_score += answer
         
-        # 标准分 = 粗分 × 1.25
         standard_score = int(raw_score * 1.25)
         
-        # 评估等级
-        if standard_score < 50:
-            level = "正常"
-            interpretation = "您的焦虑水平在正常范围内，情绪状态良好。"
-        elif standard_score < 60:
-            level = "轻度焦虑"
-            interpretation = "您可能存在轻度焦虑情绪，建议关注情绪变化，适当放松。"
-        elif standard_score < 70:
-            level = "中度焦虑"
-            interpretation = "您存在中度焦虑情绪，建议寻求专业心理支持。"
-        else:
-            level = "重度焦虑"
-            interpretation = "您存在重度焦虑情绪，强烈建议立即寻求专业心理咨询或医疗帮助。"
+        # 评估等级和详细解释
+        levels = [
+            {"range": (0, 49), "level": "正常", "color": "green"},
+            {"range": (50, 59), "level": "轻度焦虑", "color": "yellow"},
+            {"range": (60, 69), "level": "中度焦虑", "color": "orange"},
+            {"range": (70, 100), "level": "重度焦虑", "color": "red"}
+        ]
+        
+        current_level = next((l for l in levels if l["range"][0] <= standard_score <= l["range"][1]), levels[0])
+        
+        interpretations = {
+            "正常": {
+                "interpretation": "您的焦虑水平在正常范围内，情绪状态良好。",
+                "suggestions": [
+                    "继续保持当前的生活节奏和应对方式",
+                    "建议定期进行自我情绪检查",
+                    "保持健康的生活习惯，如规律运动和充足睡眠"
+                ],
+                "clinical_note": "无临床干预需求，建议维持现有状态"
+            },
+            "轻度焦虑": {
+                "interpretation": "您可能存在轻度焦虑情绪，这在日常生活中较为常见。",
+                "suggestions": [
+                    "学习放松技巧，如深呼吸、冥想或渐进式肌肉放松",
+                    "保持规律的运动习惯",
+                    "与亲友沟通，分享感受",
+                    "尝试时间管理，减轻压力源"
+                ],
+                "clinical_note": "建议自我调节，如持续2周以上未改善可考虑专业咨询"
+            },
+            "中度焦虑": {
+                "interpretation": "您存在中度焦虑情绪，可能对日常生活产生一定影响。",
+                "suggestions": [
+                    "寻求专业心理咨询师的帮助",
+                    "学习认知行为疗法(CBT)技巧",
+                    "考虑正念训练或接纳与承诺疗法",
+                    "与医生讨论是否需要进一步评估"
+                ],
+                "clinical_note": "建议寻求专业帮助，可考虑心理治疗"
+            },
+            "重度焦虑": {
+                "interpretation": "您存在重度焦虑情绪，可能显著影响日常生活和工作。",
+                "suggestions": [
+                    "立即寻求专业心理健康服务",
+                    "联系精神科医生进行全面评估",
+                    "告知亲友您的状况，寻求支持",
+                    "考虑短期的专业治疗干预"
+                ],
+                "clinical_note": "强烈建议立即寻求专业医疗帮助"
+            }
+        }
+        
+        result = interpretations[current_level["level"]]
         
         return {
             "raw_score": raw_score,
             "standard_score": standard_score,
-            "level": level,
-            "interpretation": interpretation,
+            "level": current_level["level"],
+            "level_color": current_level["color"],
+            "interpretation": result["interpretation"],
+            "suggestions": result["suggestions"],
+            "clinical_note": result["clinical_note"],
             "scale_type": "SAS",
-            "scale_name": "焦虑自评量表"
+            "scale_name": "焦虑自评量表",
+            "valid": True,
+            "score_range": {"min": 20, "max": 80, "your_score": standard_score},
+            "norm_reference": "中国常模：均值41.88±10.57"
         }
 
     @staticmethod
     def calculate_sds_score(answers: Dict[str, int]) -> Dict[str, Any]:
         """计算SDS抑郁自评量表得分"""
+        is_valid, msg = PsychologicalAssessment.validate_answers("sds", answers)
+        if not is_valid:
+            return {
+                "error": msg,
+                "valid": False,
+                "scale_type": "SDS",
+                "scale_name": "抑郁自评量表"
+            }
+        
         raw_score = 0
         for q in PsychologicalAssessment.SDS_QUESTIONS:
             key = q["key"]
@@ -134,31 +260,86 @@ class PsychologicalAssessment:
         
         standard_score = int(raw_score * 1.25)
         
-        if standard_score < 53:
-            level = "正常"
-            interpretation = "您的抑郁水平在正常范围内，情绪状态良好。"
-        elif standard_score < 63:
-            level = "轻度抑郁"
-            interpretation = "您可能存在轻度抑郁情绪，建议保持积极心态，多与他人交流。"
-        elif standard_score < 73:
-            level = "中度抑郁"
-            interpretation = "您存在中度抑郁情绪，建议寻求专业心理支持和帮助。"
-        else:
-            level = "重度抑郁"
-            interpretation = "您存在重度抑郁情绪，强烈建议立即寻求专业心理咨询或医疗帮助。"
+        levels = [
+            {"range": (0, 52), "level": "正常", "color": "green"},
+            {"range": (53, 62), "level": "轻度抑郁", "color": "yellow"},
+            {"range": (63, 72), "level": "中度抑郁", "color": "orange"},
+            {"range": (73, 100), "level": "重度抑郁", "color": "red"}
+        ]
+        
+        current_level = next((l for l in levels if l["range"][0] <= standard_score <= l["range"][1]), levels[0])
+        
+        interpretations = {
+            "正常": {
+                "interpretation": "您的抑郁水平在正常范围内，情绪状态良好。",
+                "suggestions": [
+                    "继续保持积极的生活态度",
+                    "维持社交活动和兴趣爱好",
+                    "保持规律作息和健康饮食"
+                ],
+                "clinical_note": "无临床干预需求"
+            },
+            "轻度抑郁": {
+                "interpretation": "您可能存在轻度抑郁情绪，这是常见的情绪反应。",
+                "suggestions": [
+                    "增加户外活动和阳光接触",
+                    "保持规律运动",
+                    "与信任的人分享感受",
+                    "培养新的兴趣爱好"
+                ],
+                "clinical_note": "建议自我调节，如持续2周以上未改善可考虑专业咨询"
+            },
+            "中度抑郁": {
+                "interpretation": "您存在中度抑郁情绪，可能影响日常生活功能。",
+                "suggestions": [
+                    "寻求专业心理咨询",
+                    "考虑认知行为疗法",
+                    "保持规律的生活节奏",
+                    "告知亲友获得支持"
+                ],
+                "clinical_note": "建议寻求专业帮助"
+            },
+            "重度抑郁": {
+                "interpretation": "您存在重度抑郁情绪，可能严重影响日常生活。",
+                "suggestions": [
+                    "立即联系心理健康专业人士",
+                    "考虑精神科评估",
+                    "确保身边有亲友陪伴",
+                    "避免独处，寻求紧急支持"
+                ],
+                "clinical_note": "强烈建议立即寻求专业医疗帮助"
+            }
+        }
+        
+        result = interpretations[current_level["level"]]
         
         return {
             "raw_score": raw_score,
             "standard_score": standard_score,
-            "level": level,
-            "interpretation": interpretation,
+            "level": current_level["level"],
+            "level_color": current_level["color"],
+            "interpretation": result["interpretation"],
+            "suggestions": result["suggestions"],
+            "clinical_note": result["clinical_note"],
             "scale_type": "SDS",
-            "scale_name": "抑郁自评量表"
+            "scale_name": "抑郁自评量表",
+            "valid": True,
+            "score_range": {"min": 20, "max": 80, "your_score": standard_score},
+            "norm_reference": "中国常模：均值41.38±10.57"
         }
 
     @staticmethod
     def calculate_pss_score(answers: Dict[str, int]) -> Dict[str, Any]:
         """计算PSS压力知觉量表得分"""
+        is_valid, msg = PsychologicalAssessment.validate_answers("pss", answers)
+        if not is_valid:
+            return {
+                "error": msg,
+                "valid": False,
+                "scale_type": "PSS",
+                "scale_name": "压力知觉量表"
+            }
+        
         raw_score = 0
         for q in PsychologicalAssessment.PSS_QUESTIONS:
             key = q["key"]
@@ -167,23 +348,60 @@ class PsychologicalAssessment:
                 answer = 5 - answer
             raw_score += answer
         
-        # PSS评分范围10-40，得分越高压力越大
-        if raw_score <= 13:
-            level = "低压力"
-            interpretation = "您的压力水平较低，能够较好地应对生活中的挑战。"
-        elif raw_score <= 26:
-            level = "中等压力"
-            interpretation = "您正经历中等程度的压力，建议采取适当的压力管理策略。"
-        else:
-            level = "高压力"
-            interpretation = "您的压力水平较高，长期处于高压状态可能影响身心健康，建议寻求支持和帮助。"
+        levels = [
+            {"range": (10, 13), "level": "低压力", "color": "green"},
+            {"range": (14, 26), "level": "中等压力", "color": "yellow"},
+            {"range": (27, 40), "level": "高压力", "color": "red"}
+        ]
+        
+        current_level = next((l for l in levels if l["range"][0] <= raw_score <= l["range"][1]), levels[0])
+        
+        interpretations = {
+            "低压力": {
+                "interpretation": "您的压力水平较低，能够较好地应对生活中的挑战。",
+                "suggestions": [
+                    "继续保持当前的应对策略",
+                    "维持健康的生活方式",
+                    "定期进行自我反思"
+                ],
+                "clinical_note": "压力水平正常，建议维持现有状态"
+            },
+            "中等压力": {
+                "interpretation": "您正经历中等程度的压力，这是大多数人都会经历的正常状态。",
+                "suggestions": [
+                    "学习时间管理技巧",
+                    "练习放松技巧如冥想或瑜伽",
+                    "保持充足的睡眠",
+                    "定期进行体育锻炼"
+                ],
+                "clinical_note": "建议采取压力管理策略，预防压力升高"
+            },
+            "高压力": {
+                "interpretation": "您的压力水平较高，长期处于高压状态可能影响身心健康。",
+                "suggestions": [
+                    "寻求专业心理咨询",
+                    "学习压力管理技巧",
+                    "设定合理的工作生活界限",
+                    "考虑正念减压(MBSR)训练"
+                ],
+                "clinical_note": "建议寻求专业帮助进行压力管理"
+            }
+        }
+        
+        result = interpretations[current_level["level"]]
         
         return {
             "raw_score": raw_score,
-            "level": level,
-            "interpretation": interpretation,
+            "level": current_level["level"],
+            "level_color": current_level["color"],
+            "interpretation": result["interpretation"],
+            "suggestions": result["suggestions"],
+            "clinical_note": result["clinical_note"],
             "scale_type": "PSS",
-            "scale_name": "压力知觉量表"
+            "scale_name": "压力知觉量表",
+            "valid": True,
+            "score_range": {"min": 10, "max": 40, "your_score": raw_score},
+            "norm_reference": "常模范围：10-40分，得分越高压力越大"
         }
 
     @staticmethod
@@ -226,5 +444,58 @@ class PsychologicalAssessment:
                 "anxiety": sas_result,
                 "depression": sds_result,
                 "stress": pss_result
+            },
+            "valid": True,
+            "scale_type": "COMPREHENSIVE",
+            "scale_name": "综合心理健康评估",
+            "assessment_timestamp": time.time()
+        }
+
+    @staticmethod
+    def generate_progress_report(history: List[Dict]) -> Dict[str, Any]:
+        """生成历史评估进度报告"""
+        if not history:
+            return {
+                "error": "无历史评估记录",
+                "valid": False
             }
+        
+        history_sorted = sorted(history, key=lambda x: x.get("assessment_timestamp", 0))
+        
+        trends = {
+            "sas": [],
+            "sds": [],
+            "pss": [],
+            "health_index": []
+        }
+        
+        for record in history_sorted:
+            if record.get("components"):
+                trends["sas"].append(record["components"]["anxiety"].get("standard_score", 0))
+                trends["sds"].append(record["components"]["depression"].get("standard_score", 0))
+                trends["pss"].append(record["components"]["stress"].get("raw_score", 0))
+            if record.get("health_index"):
+                trends["health_index"].append(record["health_index"])
+        
+        trend_analysis = {}
+        for key, scores in trends.items():
+            if len(scores) >= 2:
+                change = scores[-1] - scores[0]
+                if abs(change) < 5:
+                    trend_analysis[key] = {"direction": "稳定", "change": round(change, 2)}
+                elif change > 0:
+                    trend_analysis[key] = {"direction": "上升" if key == "health_index" else "恶化", "change": round(change, 2)}
+                else:
+                    trend_analysis[key] = {"direction": "下降" if key == "health_index" else "改善", "change": round(change, 2)}
+            else:
+                trend_analysis[key] = {"direction": "数据不足", "change": 0}
+        
+        return {
+            "total_assessments": len(history),
+            "first_assessment": history_sorted[0].get("assessment_timestamp"),
+            "latest_assessment": history_sorted[-1].get("assessment_timestamp"),
+            "trends": trend_analysis,
+            "trend_details": trends,
+            "valid": True,
+            "scale_name": "心理健康进度报告"
         }

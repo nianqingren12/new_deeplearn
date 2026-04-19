@@ -3,15 +3,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body, Header, Query
+import logging
+import uuid
+
+from fastapi import Depends, FastAPI, HTTPException, Request, status, Body, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 import time
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.auth import decode_token, get_current_token, hash_password, issue_token, security, verify_password
+from backend.auth import decode_token, get_current_token, hash_password, issue_token, issue_tokens, security, verify_password
 from backend.db import (
     DB_TYPE,
     consume_report_credit,
@@ -51,6 +61,7 @@ from backend.inference import (
     predict_micro_expression,
     predict_micro_expression_sequence,
     get_inference_engine,
+    get_cached_inference_engine,
 )
 
 
@@ -62,6 +73,41 @@ EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 class AuthPayload(BaseModel):
     email: str = Field(pattern=EMAIL_PATTERN)
     password: str = Field(min_length=6, max_length=128)
+
+
+# 统一响应模型
+class APIResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+    error_code: Optional[str] = None
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": True,
+                "message": "操作成功",
+                "data": {},
+                "error_code": None
+            }
+        }
+
+
+class APIError(BaseModel):
+    success: bool = False
+    message: str
+    error_code: str
+    details: Optional[str] = None
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": False,
+                "message": "操作失败",
+                "error_code": "INVALID_REQUEST",
+                "details": "详细错误信息"
+            }
+        }
 
 
 class ForgotPasswordPayload(BaseModel):
@@ -96,7 +142,7 @@ class RechargePayload(BaseModel):
 
 class CustomTrainingPayload(BaseModel):
     industry: str = Field(min_length=2, max_length=30)
-    description: str = Field(min_length=10, max_length=500)
+    description: str = Field(min_length=2, max_length=500)
 
 
 class LeadStatusPayload(BaseModel):
@@ -111,8 +157,44 @@ class PaymentPayload(BaseModel):
 app = FastAPI(
     title="微表情识别商业化原型",
     description="集用户注册、实时识别、报告生成、会员订阅和商业化功能于一体的可运行原型。",
-    version="1.0.0",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
+
+# 添加请求ID中间件用于追踪
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+# 添加全局异常处理
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"未处理的异常: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "success": False,
+            "message": "服务器内部错误",
+            "error_code": "INTERNAL_ERROR",
+            "details": str(exc) if app.debug else None
+        }
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": exc.detail,
+            "error_code": f"HTTP_{exc.status_code}",
+            "details": None
+        }
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,6 +225,42 @@ def ensure_admin_access(current_user: dict[str, Any]) -> None:
 @app.on_event("startup")
 def startup_event() -> None:
     init_db()
+
+
+@app.get("/api/system/status")
+def get_system_status() -> dict[str, Any]:
+    """获取系统状态信息"""
+    try:
+        engine = get_cached_inference_engine()
+        return {
+            "inference_engine": {
+                "name": engine.name,
+                "version": getattr(engine, 'version', 'unknown'),
+                "model_loaded": getattr(engine, 'model_loaded', False) if hasattr(engine, 'model_loaded') else False,
+                "is_real_model": getattr(engine, 'name', '').endswith('-Real'),
+            },
+            "database": {
+                "type": DB_TYPE,
+                "initialized": True
+            },
+            "version": "Medical v2.0"
+        }
+    except Exception as e:
+        logger.error(f"获取系统状态失败: {e}")
+        return {
+            "inference_engine": {
+                "name": "unknown",
+                "version": "unknown",
+                "model_loaded": False,
+                "is_real_model": False,
+                "error": str(e)
+            },
+            "database": {
+                "type": DB_TYPE,
+                "initialized": True
+            },
+            "version": "Medical v2.0"
+        }
 
 
 @app.get("/", include_in_schema=False)
